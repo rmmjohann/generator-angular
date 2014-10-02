@@ -7,6 +7,7 @@ var yeoman = require('yeoman-generator');
 var yosay = require('yosay');
 var wiredep = require('wiredep');
 var chalk = require('chalk');
+var bower = require('bower');
 
 var Generator = module.exports = function Generator(args, options) {
   yeoman.generators.Base.apply(this, arguments);
@@ -158,16 +159,43 @@ Generator.prototype.welcome = function welcome() {
   }
 };
 
-Generator.prototype.askForCompass = function askForCompass() {
+Generator.prototype.askForCssPreprocessor = function askForCssPreprocessor() {
   var cb = this.async();
 
   this.prompt([{
-    type: 'confirm',
-    name: 'compass',
-    message: 'Would you like to use Sass (with Compass)?',
-    default: true
+    type: 'list',
+    name: 'cssPreprocessor',
+    message: 'Would you like to use Sass (with Compass) or Less?',
+    default: 1,
+    choices: [
+      {
+        name: 'None',
+        value: 'none'
+      },
+      {
+        name: 'Sass (with Compass)',
+        value: 'compass'
+      },
+      {
+        name: 'Less',
+        value: 'less'
+      }
+    ]
   }], function (props) {
-    this.compass = props.compass;
+    switch (props.cssPreprocessor) {
+      case 'none':
+        this.compass = false;
+        this.less = false;
+        break;
+      case 'compass':
+        this.compass = true;
+        this.less = false;
+        break;
+      case 'less':
+        this.compass = false;
+        this.less = true;
+        break;
+    }
 
     cb();
   }.bind(this));
@@ -276,6 +304,88 @@ Generator.prototype.askForModules = function askForModules() {
 
     cb();
   }.bind(this));
+};
+
+Generator.prototype.askForCustomModules = function askForCustomModules() {
+  var cb = this.async();
+
+
+  // this.prompt([{
+  //   type: 'confirm',
+  //   name: 'customModule',
+  //   message: 'Would you like to add some more bower modules?',
+  // },{
+  //   type: 'confirm',
+  //   name: 'customModule',
+  //   message: 'Would you like to add some more bower modules2?',
+  // },{
+  //   type: 'confirm',
+  //   name: 'customModule',
+  //   message: 'Would you like to add some more bower modules3?',
+  // },{
+  //   type: 'confirm',
+  //   name: 'customModule',
+  //   message: 'Would you like to add some more bower modules4?',
+  // }], function (props) {
+
+  // });
+
+
+  this.prompt([{
+    type: 'confirm',
+    name: 'customModule',
+    message: 'Would you like to add some more bower modules?',
+    default: true
+  }], function (props) {
+    if (props.customModule) {
+      console.log('ask');
+      this._askForCustomModule();
+    } else {
+      console.log('dont ask');
+      cb();
+    }
+
+    // cb();
+  }.bind(this));
+};
+
+Generator.prototype._askForCustomModule = function _askForCustomModule() {
+  var _this = this;
+
+  this.prompt([{
+    type: 'input',
+    name: 'customModule',
+    message: 'Module name:',
+  }], function (props) {
+    console.log(props.customModule);
+
+    bower.commands
+      .search(props.customModule)
+      .on('end', function (results) {
+        console.log(results);
+        // _this.askForCustomModules();
+        _this._promptBowerSearchResultList(results);
+      });
+  }.bind(this));
+};
+
+Generator.prototype._promptBowerSearchResultList = function (results) {
+  this.prompt([{
+    type: 'list',
+    name: 'bowerComponents',
+    message: 'results:',
+    default: 0,
+    choices: [{
+      name: 'None',
+      value: null
+    }].concat(results.map(function (module) {
+      return {
+        name: '\x1b[36m' + module.name + '\x1b[0m '
+              + module.url,
+        value: module.name
+      };
+    }))
+  }]);
 };
 
 Generator.prototype.readIndex = function readIndex() {
