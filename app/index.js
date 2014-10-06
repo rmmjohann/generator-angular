@@ -9,6 +9,8 @@ var wiredep = require('wiredep');
 var chalk = require('chalk');
 var bower = require('bower');
 
+var NAME_NONE = chalk.underline('  ') + ' none ' + chalk.underline('  ');
+
 var Generator = module.exports = function Generator(args, options) {
   yeoman.generators.Base.apply(this, arguments);
   this.argument('appname', { type: String, required: false });
@@ -70,6 +72,8 @@ var Generator = module.exports = function Generator(args, options) {
     args: args
   });
 
+  this.bowerModules = [];
+
   this.on('end', function () {
     var enabledComponents = [];
 
@@ -104,33 +108,106 @@ var Generator = module.exports = function Generator(args, options) {
 
     var jsExt = this.options.coffee ? 'coffee' : 'js';
 
-    this.invoke('karma:app', {
-      options: {
-        'skip-install': this.options['skip-install'],
-        'base-path': '../',
-        'coffee': this.options.coffee,
-        'travis': true,
-        'bower-components': enabledComponents,
-        'app-files': 'app/scripts/**/*.' + jsExt,
-        'test-files': [
-          'test/mock/**/*.' + jsExt,
-          'test/spec/**/*.' + jsExt
-        ].join(','),
-        'bower-components-path': 'bower_components'
-      }
-    });
+    var bowerModuleInformations = [],
+        receivedInfoCunt = 0;
+    
+    this.bowerModules.map(function (module) {
+        bower.commands.info(module).on('end', function (result) {
+            bowerModuleInformations.push({
+                name: module,
+                version: result.latest.version,
+                file: result.latest.main.substr(2)
+            });
 
-    this.installDependencies({
-      skipInstall: this.options['skip-install'],
-      skipMessage: this.options['skip-message'],
-      callback: this._injectDependencies.bind(this)
-    });
+            receivedInfoCunt++;
 
-    if (this.env.options.ngRoute) {
-      this.invoke('angular:route', {
-        args: ['about']
-      });
-    }
+            if (receivedInfoCunt === this.bowerModules.length) {
+                invokeKarma(bowerModuleInformations);
+                installDependencies();
+                createAboutRoute();
+            }
+        }.bind(this));
+    }, this);
+
+    var invokeKarma = function invokeKarma(bowerComponentInformations) {
+        var bowerComponents = bowerComponentInformations.map(function (componentImfo) {
+            return componentImfo.file;
+        }).join(',');
+
+        this.invoke('karma:app', {
+            options: {
+              'skip-install': this.options['skip-install'],
+              'base-path': '../',
+              'coffee': this.options.coffee,
+              'travis': true,
+              'bower-components': [bowerComponents, enabledComponents].join(','),
+              'app-files': 'app/scripts/**/*.' + jsExt,
+              'test-files': [
+                'test/mock/**/*.' + jsExt,
+                'test/spec/**/*.' + jsExt
+              ].join(','),
+              'bower-components-path': 'bower_components',
+              'plugins': [
+                  'karma-chrome-launcher',
+                  'karma-firefox-launcher',
+                  'karma-safari-launcher',
+                  'karma-phantomjs-launcher',
+                  'karma-jasmine'
+              ].join(',')
+            }
+        });
+    }.bind(this);
+
+    var installDependencies = function installDependencies() {
+        this.installDependencies({
+            skipInstall: this.options['skip-install'],
+            skipMessage: this.options['skip-message'],
+            callback: this._injectDependencies.bind(this)
+        });
+    }.bind(this);
+
+    var createAboutRoute = function createAboutRoute() {
+        if (this.env.options.ngRoute) {
+            this.invoke('angular:route', {
+                args: ['about']
+            });
+        }
+    }.bind(this);
+
+//    this.invoke('karma:app', {
+//      options: {
+//        'skip-install': this.options['skip-install'],
+//        'base-path': '../',
+//        'coffee': this.options.coffee,
+//        'travis': true,
+//        'bower-components': enabledComponents,
+//        'app-files': 'app/scripts/**/*.' + jsExt,
+//        'test-files': [
+//          'test/mock/**/*.' + jsExt,
+//          'test/spec/**/*.' + jsExt
+//        ].join(','),
+//        'bower-components-path': 'bower_components',
+//        'plugins': [
+//            'karma-chrome-launcher',
+//            'karma-firefox-launcher',
+//            'karma-safari-launcher',
+//            'karma-phantomjs-launcher',
+//            'karma-jasmine'
+//        ].join(',')
+//      }
+//    });
+
+//    this.installDependencies({
+//      skipInstall: this.options['skip-install'],
+//      skipMessage: this.options['skip-message'],
+//      callback: this._injectDependencies.bind(this)
+//    });
+
+//    if (this.env.options.ngRoute) {
+//      this.invoke('angular:route', {
+//        args: ['about']
+//      });
+//    }
   });
 
   this.pkg = require('../package.json');
@@ -156,7 +233,7 @@ Generator.prototype.welcome = function welcome() {
       '\nhttps://github.com/yeoman/generator-angular#minification-safe.' +
       '\n'
     );
-  }
+  }  
 };
 
 Generator.prototype.askForCssPreprocessor = function askForCssPreprocessor() {
@@ -166,10 +243,10 @@ Generator.prototype.askForCssPreprocessor = function askForCssPreprocessor() {
     type: 'list',
     name: 'cssPreprocessor',
     message: 'Would you like to use Sass (with Compass) or Less?',
-    default: 1,
+    default: 0,
     choices: [
       {
-        name: 'None',
+        name: NAME_NONE,
         value: 'none'
       },
       {
@@ -183,10 +260,6 @@ Generator.prototype.askForCssPreprocessor = function askForCssPreprocessor() {
     ]
   }], function (props) {
     switch (props.cssPreprocessor) {
-      case 'none':
-        this.compass = false;
-        this.less = false;
-        break;
       case 'compass':
         this.compass = true;
         this.less = false;
@@ -306,30 +379,57 @@ Generator.prototype.askForModules = function askForModules() {
   }.bind(this));
 };
 
-Generator.prototype.askForCustomModules = function askForCustomModules() {
-  var cb = this.async();
+Generator.prototype.askForExplicitBowerModules = function askForExplicitBowerModules(asyncDoneFn) {
+  var cb = asyncDoneFn || this.async(),
 
+    _askForExplicitBowerModule = function _askForExplicitBowerModule() {
+      this.prompt([{
+        type: 'input',
+        name: 'bowerModuleSearchTerm',
+        message: 'Bower Module name:',
+      }], function (props) {
 
-  // this.prompt([{
-  //   type: 'confirm',
-  //   name: 'customModule',
-  //   message: 'Would you like to add some more bower modules?',
-  // },{
-  //   type: 'confirm',
-  //   name: 'customModule',
-  //   message: 'Would you like to add some more bower modules2?',
-  // },{
-  //   type: 'confirm',
-  //   name: 'customModule',
-  //   message: 'Would you like to add some more bower modules3?',
-  // },{
-  //   type: 'confirm',
-  //   name: 'customModule',
-  //   message: 'Would you like to add some more bower modules4?',
-  // }], function (props) {
+        bower.commands
+          .search(props.bowerModuleSearchTerm)
+          .on('end', function (results) {
+            _promptBowerSearchResultList(props.bowerModuleSearchTerm, results);
+          });
 
-  // });
+      }.bind(this));
+    }.bind(this),
 
+    _promptBowerSearchResultList = function _promptBowerSearchResultList(searchTerm, results) {
+        var choices = [{
+                name: NAME_NONE,
+                value: null
+            }].concat(results.map(function (module) {
+                return {
+                  name: chalk.green(module.name) + ' ' + module.url,
+                  value: module.name
+                };
+            }));
+
+        if (results.length) {
+            // prompt list bower module search results
+            this.prompt([{
+                type: 'list',
+                name: 'bowerModule',
+                message: 'Bower Modules:',
+                default: 0,
+                choices: choices
+            }], function(props) {
+                if (props.bowerModule !== null) {
+                    this.bowerModules.push(props.bowerModule);
+                }
+                this.askForExplicitBowerModules();
+            }.bind(this));
+        } else {
+            // prompt message that no bower modules were found
+            this.log(chalk.red('bower module "' + searchTerm + '" doens´t exist.'));
+            this.askForExplicitBowerModules(cb);
+        }
+
+    }.bind(this);
 
   this.prompt([{
     type: 'confirm',
@@ -338,54 +438,12 @@ Generator.prototype.askForCustomModules = function askForCustomModules() {
     default: true
   }], function (props) {
     if (props.customModule) {
-      console.log('ask');
-      this._askForCustomModule();
+      _askForExplicitBowerModule();
     } else {
-      console.log('dont ask');
       cb();
     }
 
-    // cb();
   }.bind(this));
-};
-
-Generator.prototype._askForCustomModule = function _askForCustomModule() {
-  var _this = this;
-
-  this.prompt([{
-    type: 'input',
-    name: 'customModule',
-    message: 'Module name:',
-  }], function (props) {
-    console.log(props.customModule);
-
-    bower.commands
-      .search(props.customModule)
-      .on('end', function (results) {
-        console.log(results);
-        // _this.askForCustomModules();
-        _this._promptBowerSearchResultList(results);
-      });
-  }.bind(this));
-};
-
-Generator.prototype._promptBowerSearchResultList = function (results) {
-  this.prompt([{
-    type: 'list',
-    name: 'bowerComponents',
-    message: 'results:',
-    default: 0,
-    choices: [{
-      name: 'None',
-      value: null
-    }].concat(results.map(function (module) {
-      return {
-        name: '\x1b[36m' + module.name + '\x1b[0m '
-              + module.url,
-        value: module.name
-      };
-    }))
-  }]);
 };
 
 Generator.prototype.readIndex = function readIndex() {
