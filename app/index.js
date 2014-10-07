@@ -375,7 +375,11 @@ Generator.prototype.askForBootstrap = function askForBootstrap() {
     }.bind(this));
 };
 
-Generator.prototype.askForModules = function askForModules() {
+Generator.prototype.askForSpecialAngularModules = function askForSpecialAngularModules() {
+
+};
+
+Generator.prototype.askForAngularModules = function askForAngularModules() {
     var cb = this.async();
 
     var prompts = [
