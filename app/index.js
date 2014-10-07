@@ -124,6 +124,8 @@ var Generator = module.exports = function Generator(args, options) {
         args: args
     });
 
+    this.predefinedBowerComponents = [];
+
     this.bowerComponents = [];
 
     this.nodeModules = [];
@@ -368,15 +370,53 @@ Generator.prototype.askForBootstrap = function askForBootstrap() {
             }.bind(this)
         }
     ], function (props) {
-        this.bootstrap = props.bootstrap;
-        this.compassBootstrap = props.compassBootstrap;
+        if (props.bootstrap) {
+          this.predefinedBowerComponents.push('bootstrap');
+        }
+        if (props.compassBootstrap) {
+          this.predefinedBowerComponents.push('compassBootstrap');
+        }
+        if (props.lessBootstrap) {
+          this.predefinedBowerComponents.push('lessBootstrap');
+        }
 
         cb();
     }.bind(this));
 };
 
-Generator.prototype.askForSpecialAngularModules = function askForSpecialAngularModules() {
+Generator.prototype.askForAngularRouting = function askForAngularRouting() {
+  var cb = this.async();
 
+  this.prompt([{
+    type: 'list',
+    name: 'routingModule',
+    message: 'Choose the AngularJS routing module:',
+    default: 0,
+    choices: [
+      {
+        name: 'none',
+        value: -1
+      },
+      new inquirer.Separator(),
+      {
+        name: 'angular-route',
+        value: 'angular-route'
+      },
+      {
+        name: 'angular-ui-router',
+        value: 'angular-ui-router'
+      },
+      {
+        name: 'angular-ui-router with state-helper',
+        value: 'angular-ui-router_w_state-helper'
+      }
+    ]
+  }], function (props) {
+    if (props.routingModule !== -1) {
+      // todo!!!
+      this.predefinedBowerComponents.push();
+    }
+  }.bind(this));
 };
 
 Generator.prototype.askForAngularModules = function askForAngularModules() {
