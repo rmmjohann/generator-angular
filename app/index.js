@@ -10,6 +10,51 @@ var chalk = require('chalk');
 var bower = require('bower');
 
 var NAME_NONE = chalk.underline('  ') + ' none ' + chalk.underline('  ');
+var progressIcon = {
+    _interval: null,
+    start: function () {
+        clearInterval(this.interval);
+        var progressSequence = [
+            'Oooooooooo',
+            'oOoooooooo',
+            'ooOooooooo',
+            'oooOoooooo',
+            'ooooOooooo',
+            'oooooOoooo',
+            'ooooooOooo',
+            'oooooooOoo',
+            'ooooooooOo',
+            'oooooooooO',
+            'oooooooooO',
+            'ooooooooOo',
+            'oooooooOoo',
+            'ooooooOooo',
+            'oooooOoooo',
+            'ooooOooooo',
+            'oooOoooooo',
+            'ooOooooooo',
+            'oOoooooooo',
+            'Oooooooooo'
+        ],
+        currStep = 0;
+        
+        this.interval = setInterval(function () {
+            if (currStep == progressSequence.length) {
+                currStep = 0;
+            }
+            process.stdout.clearLine();
+            process.stdout.cursorTo(0);
+            process.stdout.write(chalk.bgCyan(progressSequence[currStep]));
+            process.stdout.cursorTo(8);
+            currStep++;
+        }.bind(this), 50);
+    },
+    stop: function () {
+        clearInterval(this.interval);
+        process.stdout.clearLine();
+        process.stdout.cursorTo(0);
+    }
+};
 
 var Generator = module.exports = function Generator(args, options) {
   yeoman.generators.Base.apply(this, arguments);
@@ -111,6 +156,8 @@ var Generator = module.exports = function Generator(args, options) {
     var bowerModuleInformations = [],
         receivedInfoCunt = 0;
     
+    progressIcon.start();
+
     this.bowerModules.map(function (module) {
         bower.commands.info(module).on('end', function (result) {
             bowerModuleInformations.push({
@@ -122,6 +169,7 @@ var Generator = module.exports = function Generator(args, options) {
             receivedInfoCunt++;
 
             if (receivedInfoCunt === this.bowerModules.length) {
+                progressIcon.stop();
                 invokeKarma(bowerModuleInformations);
                 installDependencies();
                 createAboutRoute();
@@ -388,10 +436,11 @@ Generator.prototype.askForExplicitBowerModules = function askForExplicitBowerMod
         name: 'bowerModuleSearchTerm',
         message: 'Bower Module name:',
       }], function (props) {
-
+        progressIcon.start();
         bower.commands
           .search(props.bowerModuleSearchTerm)
           .on('end', function (results) {
+            progressIcon.stop();
             _promptBowerSearchResultList(props.bowerModuleSearchTerm, results);
           });
 
